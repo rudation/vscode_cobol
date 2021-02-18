@@ -5,12 +5,62 @@ import { cobolKeywordDictionary, cobolProcedureKeywordDictionary, cobolStorageKe
 
 import { FileSourceHandler } from "./filesourcehandler";
 import { COBOLFileSymbol } from "./cobolglobalcache";
-
+import { COBOLPreprocessor } from './cobapi';
 import * as fs from 'fs';
 import * as path from 'path';
 
 import { ICOBOLSettings } from "./iconfiguration";
 import { CacheDirectoryStrategy, CobolLinterProviderSymbols, ESourceFormat, IExternalFeatures } from "./externalfeatures";
+
+export class COBOLPreprocessorHelper {
+    public static ownerId: string[] = [];
+    public static sourceScanner: COBOLPreprocessor[] = [];
+
+    public static isActive(): boolean {
+        return this.sourceScanner.length !== 0;
+    }
+
+    public static actionStart(id: string): void {
+        for (const p of COBOLPreprocessorHelper.sourceScanner) {
+            try {
+                p.start(id);
+            } catch (e) {
+                //
+            }
+        }
+    }
+
+    public static actionProcess(id: string, orgLine: string): string[] {
+        let lines: string[] = [orgLine];
+        for (const p of COBOLPreprocessorHelper.sourceScanner) {
+            const allLines: string[] = [];
+            for (const line of lines) {
+                try {
+                    const plines = p.process(id, line);
+                    for (const pline of plines) {
+                        allLines.push(pline);
+                    }
+                }
+                catch (e) {
+                    //
+                }
+            }
+            lines = allLines;
+        }
+
+        return lines;
+    }
+
+    public static actionEnd(id: string): void {
+        for (const p of COBOLPreprocessorHelper.sourceScanner) {
+            try {
+                p.end(id);
+            } catch (e) {
+                //
+            }
+        }
+    }
+}
 
 export enum COBOLTokenStyle {
     CopyBook = "Copybook",
@@ -551,6 +601,7 @@ export class EmptyCOBOLSourceScannerEventHandler implements ICOBOLSourceScannerE
 }
 
 export default class COBOLSourceScanner implements ICommentCallback, ICOBOLSourceScanner {
+    public id: string;
     public sourceHandler: ISourceHandler;
     public filename: string;
     public lastModifiedTime = 0;
@@ -677,6 +728,7 @@ export default class COBOLSourceScanner implements ICommentCallback, ICOBOLSourc
         const filename = sourceHandler.getFilename();
 
         this.sourceHandler = sourceHandler;
+        this.id = sourceHandler.getUriAsString();
         this.configHandler = configHandler;
         this.cacheDirectory = cacheDirectory;
         this.filename = path.normalize(filename);
@@ -880,10 +932,14 @@ export default class COBOLSourceScanner implements ICommentCallback, ICOBOLSourc
                 break;
         }
 
+        // inform any pre-processors.
+        COBOLPreprocessorHelper.actionStart(this.id);
         let line: string | undefined = undefined;
         prevToken = Token.Blank;
         sourceHandler.resetCommentCount();
         let firstParsedLine = true;
+
+        const isPreProcessorsActive = COBOLPreprocessorHelper.isActive();
 
         for (let l = 0; l < sourceHandler.getLineCount(); l++) {
             try {
@@ -911,12 +967,44 @@ export default class COBOLSourceScanner implements ICommentCallback, ICOBOLSourc
                         firstParsedLine = false;
                     }
                     line = this.parseOraIncStru(line, oraIncPrefixFrom?.toLowerCase(), oraIncPrefixTo?.toLowerCase(), levelChangeTo);
+                    let preProcLines: string[] = [];
 
-                    if (prevToken.endsWithDot === false) {
-                        prevToken = this.parseLineByLine(sourceHandler, l, prevToken, line);
+                    if (isPreProcessorsActive) {
+                        try {
+                            preProcLines = COBOLPreprocessorHelper.actionProcess(this.id, line);
+                            if (preProcLines.length === 1 && preProcLines[0] === line) {
+                                preProcLines = [];
+                            }
+                            // else {
+                            //     state.ignoreInOutlineView = true;
+                            // }
+                        } catch (e) {
+                            externalFeatures.logException("pp", e);
+                        }
                     }
-                    else {
-                        prevToken = this.parseLineByLine(sourceHandler, l, Token.Blank, line);
+
+                    // if we have any pre-processed lines..
+                    if (preProcLines.length !== 0) {
+                        const currentOutlineView = state.ignoreInOutlineView;
+                        state.ignoreInOutlineView = true;
+                        for (const preProcLine of preProcLines) {
+                            if (preProcLine !== null && preProcLine !== undefined && preProcLine.trimLeft().length !== 0) {
+                                if (prevToken.endsWithDot === false) {
+                                    prevToken = this.parseLineByLine(sourceHandler, l, prevToken, preProcLine);
+                                }
+                                else {
+                                    prevToken = this.parseLineByLine(sourceHandler, l, Token.Blank, preProcLine);
+                                }
+                            }
+                        }
+                        state.ignoreInOutlineView = currentOutlineView;
+                    } else {
+                        if (prevToken.endsWithDot === false) {
+                            prevToken = this.parseLineByLine(sourceHandler, l, prevToken, line);
+                        }
+                        else {
+                            prevToken = this.parseLineByLine(sourceHandler, l, Token.Blank, line);
+                        }
                     }
                 }
             }
@@ -968,6 +1056,9 @@ export default class COBOLSourceScanner implements ICommentCallback, ICOBOLSourc
 
             this.eventHandler.finish();
         }
+
+        // inform any pre-processors
+        COBOLPreprocessorHelper.actionEnd(this.id);
     }
 
     private newCOBOLToken(tokenType: COBOLTokenStyle, startLine: number, line: string, token: string,
