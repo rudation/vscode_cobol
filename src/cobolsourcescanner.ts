@@ -642,7 +642,7 @@ export default class COBOLSourceScanner implements ICommentCallback, ICOBOLSourc
     readonly copybookNestedInSection: boolean;
 
     readonly configHandler: ICOBOLSettings;
-    readonly oraIncForScan = ["#oraincstru", "#oraincstrutab", "#dodaj"];
+    readonly oraIncForScan = ["#oraincstru", "#oraincstrutab", "#dodaj", "#db2incstrupoz"];
 
     parseHint_OnOpenFiles: string[] = [];
     parseHint_WorkingStorageFiles: string[] = [];
@@ -697,6 +697,7 @@ export default class COBOLSourceScanner implements ICommentCallback, ICOBOLSourc
         externalFeatures: IExternalFeatures,
         oraIncPrefixFrom?: string,
         oraIncPrefixTo?: string,
+        oraIncPrefixToMode?: string,
         levelChangeTo?: string
 
     ): COBOLSourceScanner {
@@ -713,6 +714,7 @@ export default class COBOLSourceScanner implements ICommentCallback, ICOBOLSourc
             externalFeatures,
             oraIncPrefixFrom,
             oraIncPrefixTo,
+            oraIncPrefixToMode,
             levelChangeTo);
     }
 
@@ -723,6 +725,7 @@ export default class COBOLSourceScanner implements ICommentCallback, ICOBOLSourc
         externalFeatures: IExternalFeatures,
         oraIncPrefixFrom?: string,
         oraIncPrefixTo?: string,
+        oraIncPrefixToMode?: string,
         levelChangeTo?: string) {
 
         const filename = sourceHandler.getFilename();
@@ -961,12 +964,12 @@ export default class COBOLSourceScanner implements ICommentCallback, ICOBOLSourc
                 // don't parse a empty line
                 if (line.length > 0) {
                     if (firstParsedLine && !oraIncPrefixFrom && oraIncPrefixTo && !levelChangeTo) {
-                        //very specific. Out #orainc... directives don't declare 01 level. As a consequence plugin was getting lost and generated wronk Outline.
+                        // very specific. Out #orainc... directives don't declare 01 level. As a consequence plugin was getting lost and generated wrong Outline.
                         // This is repaired by this inserted line of 01 level variable. It always looks like "01 ipk-pozycja." in our generated source code.
                         prevToken = this.parseLineByLine(sourceHandler, l, Token.Blank, "01 " + oraIncPrefixTo + "pozycja.");
                         firstParsedLine = false;
                     }
-                    line = this.parseOraIncStru(line, oraIncPrefixFrom?.toLowerCase(), oraIncPrefixTo?.toLowerCase(), levelChangeTo);
+                    line = this.parseOraIncStru(line, oraIncPrefixFrom?.toLowerCase(), oraIncPrefixTo?.toLowerCase(), oraIncPrefixToMode, levelChangeTo);
                     let preProcLines: string[] = [];
 
                     if (isPreProcessorsActive) {
@@ -1384,12 +1387,12 @@ export default class COBOLSourceScanner implements ICommentCallback, ICOBOLSourc
         this.constantsOrVariables.set(lowerCaseVariable, tokens);
     }
 
-    private parseOraIncStru(line: string, oraIncPrefixFrom: string | undefined, oraIncPrefixTo: string | undefined, levelChangeTo: string | undefined): string {
+    private parseOraIncStru(line: string, oraIncPrefixFrom: string | undefined, oraIncPrefixTo: string | undefined, oraIncPrefixToMode: string | undefined, levelChangeTo: string | undefined): string {
         if (!oraIncPrefixTo) {
             return line;
         }
 
-        if (levelChangeTo) {
+        if (levelChangeTo && oraIncPrefixToMode === "#dodaj") {
             // Very specific. #dodaj is sth like copy, only used in #include. #dodaj is not used in #orainc. #dodaj is not used with #macro.
             line = line.replace("89 ", levelChangeTo + " ").replace("XYZ-", oraIncPrefixTo).toLowerCase();
         }
@@ -1414,7 +1417,7 @@ export default class COBOLSourceScanner implements ICommentCallback, ICOBOLSourc
                     line = line_arr.join(' ');
                 } else {
                     // Rest of the variables doens't have level number, neither dot in the end. All declared at the same level, level 01 is generated automatically at the beginning.
-                    line = '05 ' + oraIncPrefixTo + line + '.';
+                    line = levelChangeTo + " " + oraIncPrefixTo + line + '.';
                 }
             }
             else {
@@ -1917,7 +1920,8 @@ export default class COBOLSourceScanner implements ICommentCallback, ICOBOLSourc
                     const trimmedCopyBook = oraIncData[0];
                     const copyBookPrefixFrom = undefined;
                     const copyBookPrefixTo = oraIncData.length > 1 ? oraIncData[1] : undefined;
-                    const copyBookLevelChange = oraIncData.length > 2 && prevTokenLowerUntrimmed === "#dodaj" ? oraIncData[2] : undefined;
+                    const copyBookPrefixToMode = prevTokenLowerUntrimmed;
+                    const copyBookLevelChange = oraIncData.length > 2 && (prevTokenLowerUntrimmed === "#dodaj" || prevTokenLowerUntrimmed === "#db2incstrupoz") ? oraIncData[2] : "05";
                     const trimmedCopyBookWithPrefix = trimmedCopyBook + '.' + copyBookPrefixTo;
                     let copyToken: COBOLToken = COBOLToken.Null;
                     if (this.copybookNestedInSection) {
@@ -1950,7 +1954,7 @@ export default class COBOLSourceScanner implements ICommentCallback, ICOBOLSourc
                                     state.ignoreInOutlineView = true;
                                     this.sourceReferences.topLevel = false;
                                     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                                    const qps = COBOLSourceScanner.ParseUncachedInlineCopybook(qfile, this, this.parse_copybooks_for_references, this.eventHandler, this.externalFeatures, copyBookPrefixFrom, copyBookPrefixTo, copyBookLevelChange);
+                                    const qps = COBOLSourceScanner.ParseUncachedInlineCopybook(qfile, this, this.parse_copybooks_for_references, this.eventHandler, this.externalFeatures, copyBookPrefixFrom, copyBookPrefixTo, copyBookPrefixToMode, copyBookLevelChange);
                                     // const qps = new COBOLSourceScanner(qfile, this.configHandler, "", this.sourceReferences, this.parse_copybooks_for_references);
                                     this.sourceReferences.topLevel = currentTopLevel;
                                     state.ignoreInOutlineView = currentIgnoreInOutlineView;

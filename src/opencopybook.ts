@@ -156,7 +156,7 @@ export class COBOLCopyBookProvider implements vscode.DefinitionProvider {
     readonly callRegEx = new RegExp('[0-9a-zA-Z][a-zA-Z0-9-_]*');
     readonly classRegEx = new RegExp('[0-9a-zA-Z][a-zA-Z0-9-_]*');
     readonly methodRegEx = new RegExp('[0-9a-zA-Z][a-zA-Z0-9-_]*');
-    readonly oraIncDirectives = ["#oraincfld{", "#oraincfldpro{", "#oraincfldproind{", "#oraincupdate{", "#oraincstru{", "#oraincstruind{", "#oraincppp2stru{", "#oraincstru2ppp{", "#oraincfld2{", "#oraincstrutab{", "#oraincstrutabind{", "#oraincstru2tstru{", "#orainctstru2stru{", "#oraincstrupoz{", "#oraincflddyn{", "#oraincflddyn2{", "#oraincsprvar{", "#dodaj{"];
+    readonly oraIncDirectives = ["#oraincfld{", "#oraincfldpro{", "#oraincfldproind{", "#oraincupdate{", "#oraincstru{", "#oraincstruind{", "#oraincppp2stru{", "#oraincstru2ppp{", "#oraincfld2{", "#oraincstrutab{", "#oraincstrutabind{", "#oraincstru2tstru{", "#orainctstru2stru{", "#oraincstrupoz{", "#oraincflddyn{", "#oraincflddyn2{", "#oraincsprvar{", "#dodaj{", "#db2incstrupoz{"];
 
     public provideDefinition(document: vscode.TextDocument,
         position: vscode.Position,
