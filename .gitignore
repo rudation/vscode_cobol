@@ -12,3 +12,4 @@ src/extension.ts.bak
 src/textprovider.ts.bak
 *nls.*.json
 sdk.zip
+manual_merge_instruction.md
