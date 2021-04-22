@@ -1,8 +1,9 @@
 'use strict';
 
+import * as path from 'path';
+
 import { workspace } from 'vscode';
 import { ICOBOLSettings, COBOLSettings, outlineFlag, formatOnReturn } from './iconfiguration';
-import * as path from 'path';
 import { isDirectory } from './extension';
 import { CacheDirectoryStrategy } from './externalfeatures';
 
@@ -12,8 +13,6 @@ export class VSCOBOLConfiguration {
 
     public static init(): ICOBOLSettings {
         const vsconfig = VSCOBOLConfiguration.config;
-
-        vsconfig.experimental_features = getBoolean('experimental_features', false);
         vsconfig.enable_tabstop = getBoolean('enable_tabstop', false);
         vsconfig.ignorecolumn_b_onwards = getBoolean('ignorecolumn_b_onwards', false);
         vsconfig.copybooks_nested = getBoolean('copybooks_nested', false);
@@ -46,6 +45,7 @@ export class VSCOBOLConfiguration {
         vsconfig.linter_house_standards_rules = getlinter_house_standards_rules();
         vsconfig.linter_mark_as_information = getBoolean("linter_mark_as_information", true);
         vsconfig.linter_ignore_section_before_entry = getBoolean("linter_ignore_section_before_entry", true);
+        vsconfig.linter_ignore_missing_copybook = getBoolean("linter_ignore_missing_copybook", false);
         vsconfig.ignore_unsafe_extensions = getBoolean("ignore_unsafe_extensions", false);
         vsconfig.coboldoc_workspace_folder = getCoboldoc_workspace_folder();
         vsconfig.scan_comments_for_hints = getBoolean("scan_comments_for_hints", false);
@@ -53,15 +53,25 @@ export class VSCOBOLConfiguration {
         vsconfig.process_metadata_cache_on_file_save = getBoolean("process_metadata_cache_on_file_save", false);
         vsconfig.cache_metadata_user_directory = getString("cache_metadata_user_directory", "");
         vsconfig.editor_maxTokenizationLineLength = workspace.getConfiguration('editor').get<number>("maxTokenizationLineLength",20000);
+
         vsconfig.sourceview = getBoolean("sourceview", false);
         vsconfig.sourceview_include_jcl_files = getBoolean("sourceview_include_jcl_files", true);
         vsconfig.sourceview_include_hlasm_files = getBoolean("sourceview_include_hlasm_files", true);
         vsconfig.sourceview_include_pli_files = getBoolean("sourceview_include_pli_files", true);
         vsconfig.sourceview_include_doc_files = getBoolean("sourceview_include_doc_files", true);
         vsconfig.sourceview_include_script_files = getBoolean("sourceview_include_script_files", true);
+        vsconfig.sourceview_include_object_files = getBoolean("sourceview_include_object_files", true);
         vsconfig.format_on_return = workspace.getConfiguration('coboleditor').get<formatOnReturn>("format_on_return",formatOnReturn.Off);
-        vsconfig.metadata_symbols = getmetadata_symbols();
-        vsconfig.metadata_entrypoints = getmetadata_entrypoints();
+
+        vsconfig.maintain_metadata_cache = getBoolean("maintain_metadata_cache", true);
+        vsconfig.maintain_metadata_cache_single_folder = getBoolean("maintain_metadata_cache_single_folder", false);
+        vsconfig.metadata_symbols = getmetadata_symbols(vsconfig);
+        vsconfig.metadata_entrypoints = getmetadata_entrypoints(vsconfig);
+        vsconfig.metadata_types = getmetadata_types(vsconfig);
+        vsconfig.metadata_files = getmetadata_files(vsconfig);
+        vsconfig.metadata_knowncopybooks = getmetadata_knowncopybooks(vsconfig);
+        vsconfig.enable_semantic_token_provider = getBoolean('enable_semantic_token_provider', false);
+        vsconfig.preprocessor_extensions = getpreprocessor_extensions();
         return vsconfig;
     }
 
@@ -325,7 +335,10 @@ function getlinter_house_standards_rules(): string[] {
     return standards;
 }
 
-function getmetadata_symbols(): string[] {
+function getmetadata_symbols(settings: ICOBOLSettings): string[] {
+    if (settings.maintain_metadata_cache === false) {
+        return [];
+    }
     const editorConfig = workspace.getConfiguration('coboleditor');
     let symbols = editorConfig.get<string[]>('metadata_symbols');
     if (!symbols || (symbols !== null && symbols.length === 0)) {
@@ -335,11 +348,65 @@ function getmetadata_symbols(): string[] {
 }
 
 
-function getmetadata_entrypoints(): string[] {
+function getmetadata_entrypoints(settings: ICOBOLSettings): string[] {
+    if (settings.maintain_metadata_cache === false) {
+        return [];
+    }
     const editorConfig = workspace.getConfiguration('coboleditor');
     let entrypoints = editorConfig.get<string[]>('metadata_entrypoints');
     if (!entrypoints || (entrypoints !== null && entrypoints.length === 0)) {
         entrypoints = [];
     }
     return entrypoints;
+}
+
+function getmetadata_types(settings: ICOBOLSettings): string[] {
+    if (settings.maintain_metadata_cache === false) {
+        return [];
+    }
+    const editorConfig = workspace.getConfiguration('coboleditor');
+    let metadata_types = editorConfig.get<string[]>('metadata_types');
+    if (!metadata_types || (metadata_types !== null && metadata_types.length === 0)) {
+        metadata_types = [];
+    }
+    return metadata_types;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function getmetadata_files(config:ICOBOLSettings): string[] {
+    if (config.maintain_metadata_cache === false) {
+        return [];
+    }
+
+    const editorConfig = workspace.getConfiguration('coboleditor');
+    let metadata_files = editorConfig.get<string[]>('metadata_files');
+    if (!metadata_files || (metadata_files !== null && metadata_files.length === 0)) {
+        metadata_files = [];
+    }
+
+    return metadata_files;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function getmetadata_knowncopybooks(config:ICOBOLSettings): string[] {
+    if (config.maintain_metadata_cache === false) {
+        return [];
+    }
+
+    const editorConfig = workspace.getConfiguration('coboleditor');
+    let metadata_knowncopybooks = editorConfig.get<string[]>('metadata_knowncopybooks');
+    if (!metadata_knowncopybooks || (metadata_knowncopybooks !== null && metadata_knowncopybooks.length === 0)) {
+        metadata_knowncopybooks = [];
+    }
+
+    return metadata_knowncopybooks;
+}
+
+function getpreprocessor_extensions(): string[] {
+    const editorConfig = workspace.getConfiguration('coboleditor');
+    let preprocessor_extensions = editorConfig.get<string[]>('preprocessor_extensions');
+    if (!preprocessor_extensions || (preprocessor_extensions !== null && preprocessor_extensions.length === 0)) {
+        preprocessor_extensions = [];
+    }
+    return preprocessor_extensions;
 }

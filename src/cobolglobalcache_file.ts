@@ -9,18 +9,22 @@ import { COBOLSymbol, COBOLSymbolTable, InMemoryFileSymbolCache } from './cobolg
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const lzjs = require('lzjs');
 
-// JSON callbacks to Map to something that can be serialised
+// JSON callbacks to Map to something that can be serialized
 // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
 export function replacer(this: any, key: any, value: any): any {
+    if (typeof value === 'bigint') {
+        return value.toString();
+    }
+
     const originalObject = this[key];
     if (originalObject instanceof Map) {
         return {
             dataType: 'Map',
             value: Array.from(originalObject.entries()), // or with spread: value: [...originalObject]
         };
-    } else {
-        return value;
     }
+
+    return value;
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
@@ -45,11 +49,11 @@ function logMessage(mesg: string) {
 
 export class COBOLSymbolTableHelper {
 
-    private static isFileT(sdir: string): [boolean, fs.Stats | undefined] {
+    private static isFileT(sdir: string): [boolean, fs.BigIntStats | undefined] {
         try {
             if (fs.existsSync(sdir)) {
                 try {
-                    const f = fs.statSync(sdir);
+                    const f = fs.statSync(sdir, { bigint: true });
                     if (f && f.isFile()) {
                         return [true, f];
                     }
@@ -84,7 +88,7 @@ export class COBOLSymbolTableHelper {
             if (cachedTable !== undefined) {
                 /* is the cache table still valid? */
                 try {
-                    const stat4src = fs.statSync(filename);
+                    const stat4src = fs.statSync(filename, { bigint: true });
                     if (stat4src.mtimeMs === cachedTable.lastModifiedTime) {
                         return cachedTable;
                     }
@@ -123,9 +127,9 @@ export class COBOLSymbolTableHelper {
 
             const str: string = fs.readFileSync(fn).toString();
             try {
-                const cachableTable = JSON.parse(lzjs.decompress(str), reviver);
-                InMemoryFileSymbolCache.set(filename, cachableTable);
-                return cachableTable;
+                const cacheableTable = JSON.parse(lzjs.decompress(str), reviver);
+                InMemoryFileSymbolCache.set(filename, cacheableTable);
+                return cacheableTable;
             } catch {
                 try {
                     fs.unlinkSync(fn);
@@ -153,5 +157,6 @@ export class COBOLSymbolTableHelper {
             logMessage(`Symbol file removed ${nfilename}`);
         }
     }
+
 
 }

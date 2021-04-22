@@ -3,6 +3,7 @@ import { COBOLTokenStyle, splitArgument } from './cobolsourcescanner';
 import { VSCOBOLConfiguration } from './configuration';
 import { outlineFlag } from './iconfiguration';
 import VSCOBOLSourceScanner from './vscobolscanner';
+import { VSPreProc } from './vspreproc';
 
 export class JCLDocumentSymbolProvider implements vscode.DocumentSymbolProvider {
 
@@ -32,7 +33,8 @@ export class JCLDocumentSymbolProvider implements vscode.DocumentSymbolProvider 
             if (textText.startsWith("//")) {
                 const textLineClean = textText.substr(2);
                 const lineTokens = [];
-                const possibleTokens = splitArgument(textLineClean, false);
+                const possibleTokens:string[] = [];
+                splitArgument(textLineClean, false, possibleTokens);
                 for (let l = 0; l < possibleTokens.length; l++) {
                     if (possibleTokens[l] !== undefined) {
                         const possibleToken = possibleTokens[l].trim();
@@ -84,7 +86,11 @@ export class CobolDocumentSymbolProvider implements vscode.DocumentSymbolProvide
             return symbols;
         }
 
-        const sf = VSCOBOLSourceScanner.getCachedObject(document);
+        if (VSPreProc.areAllPreProcessorsReady(settings) === false) {
+            return symbols;
+        }
+
+        const sf = VSCOBOLSourceScanner.getCachedObject(document, settings);
 
         if (sf === undefined) {
             return symbols;
@@ -123,7 +129,10 @@ export class CobolDocumentSymbolProvider implements vscode.DocumentSymbolProvide
                         case COBOLTokenStyle.CopyBook:
                             symbols.push(new vscode.SymbolInformation(token.description, vscode.SymbolKind.File, container, lrange));
                             break;
-                        case COBOLTokenStyle.CopyBookIn:
+                        case COBOLTokenStyle.CopyBookInOrOf:
+                            symbols.push(new vscode.SymbolInformation(token.description, vscode.SymbolKind.File, container, lrange));
+                            break;
+                        case COBOLTokenStyle.File:
                             symbols.push(new vscode.SymbolInformation(token.description, vscode.SymbolKind.File, container, lrange));
                             break;
                         case COBOLTokenStyle.Declaratives:
@@ -184,11 +193,17 @@ export class CobolDocumentSymbolProvider implements vscode.DocumentSymbolProvide
                                 }
                             }
                             break;
-                        case COBOLTokenStyle.ConditionName :
+                        case COBOLTokenStyle.ConditionName:
                             if (includeVars === false) {
                                 break;
                             }
                             symbols.push(new vscode.SymbolInformation(token.description, vscode.SymbolKind.TypeParameter, container, lrange));
+                            break;
+                        case COBOLTokenStyle.Union:
+                            if (includeVars === false) {
+                                break;
+                            }
+                            symbols.push(new vscode.SymbolInformation(token.description, vscode.SymbolKind.Struct, container, lrange));
                             break;
                         case COBOLTokenStyle.Constant:
                             if (includeVars === false) {

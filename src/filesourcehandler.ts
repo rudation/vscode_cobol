@@ -1,13 +1,15 @@
+import fs from 'fs';
+
 import ISourceHandler, { ICommentCallback } from './isourcehandler';
 import { cobolKeywordDictionary } from './keywords/cobolKeywords';
 
 // let detab = require('detab');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const lineByLine = require('n-readlines');
-import fs from 'fs';
 
 import { EmptyExternalFeature, IExternalFeatures } from './externalfeatures';
-import { pathToFileURL, URL } from 'url';
+import { pathToFileURL } from 'url';
+
 
 export class FileSourceHandler implements ISourceHandler {
     document: string;
@@ -16,6 +18,8 @@ export class FileSourceHandler implements ISourceHandler {
     lines: string[];
     commentCount: number;
     commentCallback?: ICommentCallback;
+    documentVersionId: BigInt;
+    isSourceInWorkspace: boolean;
 
     public constructor(document: string, dumpNumbersInAreaA: boolean, commentCallback?: ICommentCallback, features?: IExternalFeatures) {
         this.document = document;
@@ -24,13 +28,15 @@ export class FileSourceHandler implements ISourceHandler {
         this.dumpAreaBOnwards = false;
         this.lines = [];
         this.commentCount = 0;
+        this.isSourceInWorkspace = false;
 
         if (features === undefined) {
             features = EmptyExternalFeature.Default;
         }
-        const docstat = fs.statSync(document);
+        const docstat = fs.statSync(document, {bigint:true});
         const docChunkSize = docstat.size < 4096 ? 4096 : 96 * 1024;
         let line: string;
+        this.documentVersionId = docstat.mtimeMs;
         const startTime = features.performance_now();
         try {
             const liner = new lineByLine(document, { readChunk: docChunkSize });
@@ -42,7 +48,10 @@ export class FileSourceHandler implements ISourceHandler {
         catch (e) {
             features.logException("File failed! (" + document + ")", e);
         }
+    }
 
+    getDocumentVersionId(): BigInt {
+        return this.documentVersionId;
     }
 
     private sendCommentCallback(line: string, lineNumber:number) {
@@ -65,7 +74,7 @@ export class FileSourceHandler implements ISourceHandler {
 
     private static readonly paraPrefixRegex1 = /^[0-9 ][0-9 ][0-9 ][0-9 ][0-9 ][0-9 ]/g;
 
-    getLine(lineNumber: number): string | undefined {
+    getLine(lineNumber: number, raw:boolean): string | undefined {
         let line:string|undefined=undefined;
 
         try {
@@ -74,6 +83,10 @@ export class FileSourceHandler implements ISourceHandler {
             }
 
             line = this.lines[lineNumber];
+
+            if (raw) {
+                return line;
+            }
 
             const startComment = line.indexOf("*>");
             if (startComment !== -1) {
@@ -141,5 +154,13 @@ export class FileSourceHandler implements ISourceHandler {
 
     resetCommentCount(): void {
         this.commentCount = 0;
+    }
+
+    getIsSourceInWorkSpace(): boolean {
+        return this.isSourceInWorkspace;
+    }
+
+    getShortWorkspaceFilename(): string {
+        return "";
     }
 }
