@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { VSCOBOLConfiguration } from './configuration';
 import {  COBOLGlobalSymbolTable } from './cobolglobalcache';
 import { COBOLCopyBookProvider } from './opencopybook';
-import { InMemoryGlobalSymbolCache } from './cobolworkspacecache';
+import { InMemoryGlobalSymbolCache } from './globalcachehelper';
 
 export class COBOLCallTargetProvider implements vscode.DefinitionProvider {
     public provideDefinition(document: vscode.TextDocument,
@@ -19,10 +19,6 @@ export class COBOLCallTargetProvider implements vscode.DefinitionProvider {
     private resolveDefinitions(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): vscode.ProviderResult<vscode.Definition> {
         const locations: vscode.Location[] = [];
         const config = VSCOBOLConfiguration.get();
-
-        // if (VSCOBOLConfiguration.isOnDiskCachingEnabled() === false) {
-        //     return locations;
-        // }
 
         const theline = document.lineAt(position).text;
 

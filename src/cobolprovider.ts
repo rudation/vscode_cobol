@@ -5,8 +5,7 @@ import COBOLSourceScanner, { COBOLToken, camelize } from './cobolsourcescanner';
 import { VSCOBOLConfiguration } from './configuration';
 import TrieSearch from 'trie-search';
 import { performance_now, logMessage, logTimeThreshold } from './extension';
-import { InMemoryGlobalSymbolCache } from './cobolworkspacecache';
-
+import { InMemoryGlobalSymbolCache } from './globalcachehelper';
 
 export class CobolSourceCompletionItemProvider implements CompletionItemProvider {
 
@@ -17,7 +16,7 @@ export class CobolSourceCompletionItemProvider implements CompletionItemProvider
     }
 
     private getPerformTargets(document: TextDocument): TrieSearch {
-        const sf: COBOLSourceScanner | undefined = VSCOBOLSourceScanner.getCachedObject(document);
+        const sf: COBOLSourceScanner | undefined = VSCOBOLSourceScanner.getCachedObject(document, this.iconfig);
 
         if (sf !== undefined) {
             if (sf.cpPerformTargets === undefined) {
@@ -46,8 +45,8 @@ export class CobolSourceCompletionItemProvider implements CompletionItemProvider
         return new TrieSearch('tokenName');
     }
 
-    private getConstantsOrVariables(document: TextDocument): TrieSearch {
-        const sf = VSCOBOLSourceScanner.getCachedObject(document);
+    private getConstantsOrVariables(document: TextDocument, settings: ICOBOLSettings): TrieSearch {
+        const sf = VSCOBOLSourceScanner.getCachedObject(document, settings);
 
         if (sf !== undefined) {
             if (sf.cpConstantsOrVars === undefined) {
@@ -87,12 +86,19 @@ export class CobolSourceCompletionItemProvider implements CompletionItemProvider
         const words: COBOLToken[] = tsearch.get(wordToComplete);
         const numberOfWordsInResults = words.length;
 
+        const workMap = new Map<string, string>();
+
         const items: CompletionItem[] = [];
         for (let c = 0; c < numberOfWordsInResults; c++) {
 
             //if the text is uppercase, the present the items as uppercase
             const key: COBOLToken = words[c];
             const retKeys = [];
+
+            if (workMap.has(key.tokenNameLower)) {
+                continue;
+            }
+            workMap.set(key.tokenNameLower, key.tokenNameLower);
 
             if (includeAsIS) {
                 retKeys.push((key.tokenName));
@@ -126,6 +132,77 @@ export class CobolSourceCompletionItemProvider implements CompletionItemProvider
         // logMessage("Search for [" + wordToComplete + "] gives " + items.length + " words");
         return items;
 
+    }
+
+    private getAllCopyBook(includeQuoted: boolean): CompletionItem[] {
+        const items: CompletionItem[] = [];
+        const mapOfCopybooks = new Map<string, string>();
+
+        for (const [encodedKey, ] of InMemoryGlobalSymbolCache.knownCopybooks) {
+            const copybook = encodedKey.split(",")[0];
+            if (mapOfCopybooks.has(copybook) === false) {
+                mapOfCopybooks.set(copybook, copybook);
+            }
+        }
+
+        for (const [copybook] of mapOfCopybooks) {
+            items.push(new CompletionItem(copybook, CompletionItemKind.File));
+            if (includeQuoted) {
+                items.push(new CompletionItem(`"${copybook}"`, CompletionItemKind.File));
+                items.push(new CompletionItem(`'${copybook}'`, CompletionItemKind.File));
+            }
+        }
+        return items;
+    }
+
+    private getAllTypes(workToComplete: string): CompletionItem[] {
+        const startsWith = workToComplete.length != 0;
+        const items: CompletionItem[] = [];
+        const itemMap = new Map<string, CompletionItem>();
+
+        for (const [type] of InMemoryGlobalSymbolCache.types) {
+            if (itemMap.has(type) === false) {
+                continue;
+            }
+
+            if (startsWith) {
+                if (type.startsWith(workToComplete)) {
+                    items.push(new CompletionItem(type, CompletionItemKind.Class));
+                }
+            } else {
+                items.push(new CompletionItem(type, CompletionItemKind.Class));
+            }
+        }
+
+        for (const [type] of InMemoryGlobalSymbolCache.interfaces) {
+            if (itemMap.has(type) === false) {
+                continue;
+            }
+
+            if (startsWith) {
+                if (type.startsWith(workToComplete)) {
+                    items.push(new CompletionItem(type, CompletionItemKind.Interface));
+                }
+            } else {
+                items.push(new CompletionItem(type, CompletionItemKind.Interface));
+            }
+
+        }
+
+        for (const [type] of InMemoryGlobalSymbolCache.enums) {
+            if (itemMap.has(type) === false) {
+                continue;
+            }
+            if (startsWith) {
+                if (type.startsWith(workToComplete)) {
+                    items.push(new CompletionItem(type, CompletionItemKind.Enum));
+                }
+            } else {
+                items.push(new CompletionItem(type, CompletionItemKind.Enum));
+            }
+        }
+
+        return items;
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -176,9 +253,21 @@ export class CobolSourceCompletionItemProvider implements CompletionItemProvider
                 if (currentLine.toLowerCase().indexOf("cancel") !== -1) {
                     items = this.getCallTargets();
                 }
+                if (currentLine.toLowerCase().indexOf("copy") !== -1) {
+                    items = this.getAllCopyBook(false);
+                }
             }
             else {
                 switch (wordBeforeLower) {
+                    case "copy":
+                        items = this.getAllCopyBook(true);
+                        break;
+                    case "type": {
+                        items = this.getAllTypes(wordToComplete);
+                        break;
+                    }
+                    case "thru":
+                    case "through":
                     case "perform":
                     case "goto":
                         {
@@ -189,7 +278,7 @@ export class CobolSourceCompletionItemProvider implements CompletionItemProvider
 
                     case "move":
                         {
-                            const words = this.getConstantsOrVariables(document);
+                            const words = this.getConstantsOrVariables(document, this.iconfig);
 
                             // TODO:
                             //
@@ -238,8 +327,11 @@ export class CobolSourceCompletionItemProvider implements CompletionItemProvider
                     case "unstring":
                     case "varying":
                     case "with":
+                    case "display":
+                    case "value":
+                    case "values":
                         {
-                            const words = this.getConstantsOrVariables(document);
+                            const words = this.getConstantsOrVariables(document, this.iconfig);
                             items = this.getItemsFromList(words, wordToComplete, CompletionItemKind.Variable);
                             break;
                         }
