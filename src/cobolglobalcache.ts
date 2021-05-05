@@ -1,12 +1,28 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 
+export class COBOLWorkspaceFile {
+    lastModifiedTime:BigInt;
+    workspaceFilename: string;
+
+    constructor(lastModifiedTime:BigInt, workspaceFilename: string) {
+        this.lastModifiedTime = lastModifiedTime;
+        this.workspaceFilename = workspaceFilename;
+    }
+}
+
 export class COBOLGlobalSymbolTable {
-    public lastModifiedTime = 0;
     public callableSymbols = new Map<string, COBOLFileSymbol[]>();
     public entryPoints = new Map<string, COBOLFileSymbol[]>();
+
+    public types = new Map<string, COBOLFileSymbol[]>();
+    public interfaces = new Map<string, COBOLFileSymbol[]>();
+    public enums =  new Map<string, COBOLFileSymbol[]>();
+
+    public knownCopybooks = new Map<string, string>();
+    
     public isDirty = false;
-    public sourceFilenameModified = new Map<string, number>();
+    public sourceFilenameModified = new Map<string, COBOLWorkspaceFile>();
 
     // eslint-disable-next-line @typescript-eslint/ban-types
     static fromJSON(d: Object): COBOLGlobalSymbolTable {
@@ -15,7 +31,7 @@ export class COBOLGlobalSymbolTable {
 }
 
 export class COBOLSymbolTable {
-    public lastModifiedTime = 0;
+    public lastModifiedTime:BigInt = BigInt("0");
     public fileName = "";
 
     public variableSymbols: Map<string, COBOLSymbol>;
@@ -60,5 +76,7 @@ export class COBOLSymbol {
         return Object.assign(new COBOLSymbol(), d);
     }
 }
+
+
 
 export const InMemoryFileSymbolCache: Map<string, COBOLSymbolTable> = new Map<string, COBOLSymbolTable>();

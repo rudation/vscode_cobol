@@ -1,4 +1,12 @@
 set +e
+if [ "x${OVSX_PATH}${OVSX_USERNAME}${OVSX_REGISTRY_URL}${OVSX_PASSWORD}" != "x" ]; then
+	echo Sorry cannot do anything due to OVSX_ env being set
+	exit 1
+fi
+
+
+#git config core.hooksPath .githooks
+
 PACKAGE_VERSION=$(node -p -e "require('./package.json').version")
 
 export PATH=$(pwd)/./node_modules/.bin:$PATH
@@ -40,3 +48,6 @@ else
  exit 1
 fi
 rm package.json package-lock.json
+
+cd ../src
+zip ../sdk.zip cobapi.ts
